@@ -1,8 +1,21 @@
+from information import Information
+import numpy as np
+
 class Producer:
-    def __init__(self, id_ = 1, party = "red"):
+    def __init__(self, id_ = 1, party = "red", misinfo_rate = 0.0):
         self.id_ = id_
         self.party = party
         self.consumers = set()
+        self.misinfo_rate = misinfo_rate
+
+
+    def gen_info(self) -> Information:
+        is_misinformation = False
+        if np.random.rand() < self.misinfo_rate:
+            is_misinformation = True
+
+        info = Information(self.party, is_misinformation)
+        return info
 
 
     def __eq__(self, other):

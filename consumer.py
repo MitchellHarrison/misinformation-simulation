@@ -1,3 +1,4 @@
+from information import Information
 import numpy as np
 
 # probs correspond to [many, some, few, none] friends of opposing party (Pew)
@@ -66,13 +67,13 @@ class Consumer:
 
     def remove_friend(self, friend):
         try:
-            self.friends.remove(f)
+            self.friends.remove(friend)
         except ValueError:
             print(f"Consumer {friend.id_} is not a friend of consumer {self.id}")
             return
         self.n_friends = len(self.friends)
-        if f.party != self.party:
-            self.n_diverse_friends -=1
+        if friend.party != self.party:
+            self.n_friends_diverse -=1
 
 
     def add_producer(self, producer):
@@ -90,6 +91,26 @@ class Consumer:
             print(f"Producer {producer.id_} is not a producer for {self.id}")
             return
         self.n_producers = len(self.producers)
+
+
+    def consumes_misinfo_only(self):
+        for p in self.producers:
+            if p.misinfo_rate == 0:
+                return False
+        return True
+
+
+    def consumes_diverse_media(self):
+        producer_party = [p.party for p in self.producers]
+        if all(party == producer_party[0] for party in producer_party):
+            return False
+        return True
+
+
+    def consumes_mono_media(self):
+        if self.consumes_diverse_media():
+            return False
+        return True
 
 
     def is_friend(self, friend) -> bool:
