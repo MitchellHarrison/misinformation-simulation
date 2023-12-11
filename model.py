@@ -27,9 +27,9 @@ class MediaModel:
 
             # create consumers
             else:
-                agent = Consumer(i + 1)
+                agent = Consumer(i + 1, np.random.uniform(-1,1))
                 self.consumers.append(agent)
-            print(agent)
+            #print(agent)
             self.agents.append(agent)
 
         # represent model as NetworkX graph
@@ -37,16 +37,14 @@ class MediaModel:
         for consumer in self.agents[n_producers:]:
             edges_per_node[consumer.id_] = consumer.n_friends
 
-        #self.G = nx.Graph()
-        #self.G.add_nodes_from([agent.id_ for agent in self.agents])
-        #self.setup_starting_edges(edges_per_node)
-        #colors = ["red" if isinstance(agent, Producer) else "skyblue" for 
-        #          agent in self.agents]
-        #nx.draw(self.G, with_labels=True, font_weight='bold', node_size=700,
-        #        node_color=colors, font_size=10, font_color='black',
-        #        font_family='sans-serif')
-        #plt.show()
-        self.setup_starting_edges2()
+        self.G = nx.Graph()
+        self.G.add_nodes_from([a.id_ for a in self.agents])
+        self.setup_starting_edges(edges_per_node)
+        node_colors = [node.party for node in self.agents]
+        nx.draw(self.G, with_labels=True, font_weight='bold', node_size=700,
+                node_color=node_colors, font_size=10, font_color='black',
+                font_family='sans-serif')
+        plt.show()
 
 
     # return ID of consumers that have enough friends already
@@ -68,121 +66,47 @@ class MediaModel:
                      isinstance(agent, Producer)]
         consumers = [agent for agent in self.agents if 
                      isinstance(agent, Consumer)]
+        edges = [] 
 
         # Connect each consumer to at least one producer
         for consumer in consumers:
-            producer = np.random.choice(producers)
-            self.G.add_edge(consumer.id_, producer.id_)
+            right_color = False
+            while not right_color:
+                producer = np.random.choice(producers)
+                if producer.party == consumer.party:
+                    self.G.add_edge(consumer.id_, producer.id_)
+                    right_color = True
 
-        # Add additional edges to meet the specified number of friends
-        for node, num_edges in edges_per_node.items():
-            full_friends =  self.check_edge_count(edges_per_node)
-            existing_edges = set(self.G.neighbors(node))
+        # Add friends at random using friend diversity data
+        reds = [a for a in self.agents[self.n_producers:] if a.party == "red"]
+        blues = [a for a in self.agents[self.n_producers:] if a.party == "blue"]
+        for c in self.agents[self.n_producers:]:
+            # divide friends by 2 to correct over-adding of non-diverse friends
+            n_friends_same = (c.n_friends_ideal - c.n_friends_diverse_ideal) / 2
+            if c.party == "red":
+                sames = reds
+                diffs = blues
+            else:
+                sames = blues
+                diffs = reds
 
-            if len(existing_edges) >= edges_per_node[node]:
-                full_friends.union({node})
-                continue
-
-            potential_friends = set(consumer.id_ for consumer in consumers)
-            potential_friends -= existing_edges
-            potential_friends -= {node}
-            potential_friends -= full_friends
-            additional_edges = min(num_edges - 1, len(potential_friends))
-
-            # Prioritize connections to producers
-            producers_friends = set(producer.id_ for producer in producers)
-            selected_producer_friends = list(producers_friends &
-                                             potential_friends)
-            additional_producer_edges = min(additional_edges,
-                                            len(selected_producer_friends))
-            selected_nodes = selected_producer_friends[:additional_producer_edges]
-
-            # Randomly select additional friends from the remaining consumers
-            remaining_friends = list(potential_friends - set(selected_nodes))
-
-            remaining_additional_edges = additional_edges
-            remaining_additional_edges -= additional_producer_edges
-
-            selected_nodes.extend(random.sample(remaining_friends,
-                                                remaining_additional_edges))
-
-            self.G.add_edges_from([(node, friend) for friend in selected_nodes])
-        
-
-    def setup_starting_edges2(self) -> None:
-        red_producers = []
-        blue_producers = []
-        for producer in self.agents[:self.n_producers]:
-            if producer.party == "red":
-                red_producers.append(producer)
-            elif producer.party == "blue":
-                blue_producers.append(producer)
-
-        consumers = self.agents[self.n_producers:]
-        for consumer in consumers:
-
-            # add producers for each consumer
-            if consumer.party == "red":
-                consumer.producers.append(np.random.choice(red_producers))
-
-                if consumer.consumes_diverse:
-                    new_blue = np.random.choice(blue_producers)
-                    consumer.producers.append(new_blue)
-
-            elif consumer.party == "blue":
-                consumer.producers.append(np.random.choice(blue_producers))
-
-                if consumer.consumes_diverse:
-                    new_red = np.random.choice(red_producers)
-                    consumer.producers.append(new_red)
-
-
-            # add friends for each consumer, checking for nodes that need them
-            options = random.sample(self.consumers, len(self.consumers))
-            for o in options:
-                if consumer.id_ == o.id_ or consumer.is_friend(o):
+            new_friends_same = random.sample(sames, int(n_friends_same))
+            new_friends_diff = random.sample(diffs, int(c.n_friends_diverse_ideal))
+            new_friends = new_friends_same + new_friends_diff
+            for f in new_friends:
+                if f.id_ == c.id_:
                     continue
-                
-                if o.n_friends < o.n_friends_ideal:
-                    if o.party == consumer.party:
-                        self.make_friends(consumer, o)
-                        if consumer.n_friends >= consumer.n_friends_ideal:
-                            break
-                    else:
-                        o_needs = o.needs_friends_diverse()
-                        c_needs = consumer.needs_friends_diverse()
-                        if o_needs and c_needs:
-                            self.make_friends(consumer, o)
-                            if consumer.n_friends >= consumer.n_friends_ideal:
-                                break
+                self.make_friends(c, f)
 
-            missing = True
-            while missing:
-                if consumer.n_friends < consumer.n_friends_ideal:
-                    others = {
-                        "blue": [o for o in options if o.party == "red" and
-                                 not consumer.is_friends(o)],
-                        "red": [o for o in options if o.party == "blue" and
-                                not consumer.is_friends(o)]
-                    }
+        # add edges
+        for c in self.agents[self.n_producers:]:
+            idx = c.id_
+            connects = c.friends + c.producers
+            for f in connects:
+                edges.append((idx, f.id_))
 
-                    same = {
-                        "red": others["blue"],
-                        "blue": others["red"]
-                    }
-
-                    # if more diverse friends are needed
-                    if consumer.n_friends_diverse<consumer.n_friends_diverse_ideal:
-                        new_friend = np.random.choice(others[consumer.party])
-                    else:
-                        new_friend = np.random.choice(same[consumer.party])
-
-                    self.make_friends(consumer, new_friend)
-
-                    if consumer.n_friends >= consumer.n_friends.ideal and \
-                    consumer.n_friends.diverse >= consumer.n_friends_diverse_ideal:
-                        missing = False
-
+        self.G.add_edges_from(edges)
+        
 
     # create relatinship between two consumers
     def make_friends(self, f1, f2) -> None:

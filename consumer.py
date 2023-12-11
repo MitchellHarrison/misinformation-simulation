@@ -5,9 +5,9 @@ RED_FRIEND_PROBS = [.07, .46, .31, .14]
 BLUE_FRIEND_PROBS = [.06, .31, .38, .25]
 
 # proportion of friend group that is diverse given above classification
-MANY = 0.3
-SOME = 0.2
-FEW = 0.1
+MANY = 0.6
+SOME = 0.5
+FEW = 0.3
 NONE = 0.0
 DIVERSE_FRIENDS = [MANY, SOME, FEW, NONE]
 
@@ -41,19 +41,27 @@ class Consumer:
 
         # how many politically diverse friends a consumer has
         friend_diversity = np.random.choice(DIVERSE_FRIENDS)
-        self.n_friends_diverse_ideal = int(self.n_friends * friend_diversity)
+        self.n_friends_diverse_ideal = int(self.n_friends_ideal * friend_diversity)
         p_div = P_DIVERSE_RED if self.party == "red" else P_DIVERSE_BLUE
         self.consumes_diverse = np.random.choice([True, False], p = p_div)
 
 
-    def add_friend(self, friend):
-        if friend in self.friends:
-            print(f"Consumers {self.id_} and {friend.id_} are already friends")
+    def add_friend(self, friends):
+        if type(friends) is not list:
+            self.friends.append(friends)
+            self.n_friends = len(self.friends) 
+            if friends.party != self.party:
+                self.n_friends_diverse += 1
             return
-        self.friends.append(friend)
-        self.n_friends = len(self.friends) 
-        if friend.party != self.party:
-            self.n_friends_diverse += 1
+
+        for f in friends:
+            if f in self.friends:
+                print(f"Consumers {self.id_} and {friend.id_} are already friends")
+                return
+            self.friends.append(f)
+            self.n_friends = len(self.friends) 
+            if f.party != self.party:
+                self.n_friends_diverse += 1
 
 
     def remove_friend(self, friend):
