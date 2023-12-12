@@ -4,10 +4,16 @@ from information import Information
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import csv
 import random
+import os
+
+PROD_PATH = "data/producers.csv"
+CON_PATH = "data/consumers.csv"
 
 class MediaModel:
     def __init__(self, n_producers = 3, n_consumers = 50):
+        self.current_iteration = 0
         self.n_producers = n_producers
         self.n_consumers = n_consumers
         self.n_agents = n_producers + n_consumers
@@ -17,20 +23,21 @@ class MediaModel:
         self.consumers = []
         self.producers = []
         for i in range(self.n_agents):
-            # create produce}s
+            # create producers
             if i < n_producers:
                 if i % 2 == 0:
                     color = "red"
+                    mis_rate = 0.5
                 else:
                     color = "blue"
-                agent = Producer(i + 1, color)
+                    mis_rate = 0
+                agent = Producer(i + 1, color, mis_rate)
                 self.producers.append(agent)
 
             # create consumers
             else:
                 agent = Consumer(i + 1, np.random.uniform(-1,1))
                 self.consumers.append(agent)
-            #print(agent)
             self.agents.append(agent)
 
         # represent model as NetworkX graph
@@ -42,6 +49,8 @@ class MediaModel:
         self.G.add_nodes_from([a.id_ for a in self.agents])
         self.setup_starting_edges(edges_per_node)
 
+        self.write_data()        
+        self.current_iteration += 1
 
     # return ID of consumers that have enough friends already
     def check_edge_count(self, edges_per_node) -> set:
@@ -71,6 +80,7 @@ class MediaModel:
                 producer = np.random.choice(producers)
                 if producer.party == consumer.party:
                     self.G.add_edge(consumer.id_, producer.id_, weight = 1)
+                    consumer.add_producer(producer)
                     right_color = True
 
         # Add friends at random using friend diversity data
@@ -117,9 +127,9 @@ class MediaModel:
 
     # control what occurs at each model iteration
     def step(self, wdelta_same = 0.1, wdelta_diff = 0.05, miswdelta_same = 0.0, 
-            miswdelta_diff = -0.4, miswdelta_trusted = 0.4, poldelta_mono = 0.1,
-            poldelta_mis = 0.2, poldelta_diverse = 0.1, new_weight = 0.5, 
-            frienddelta_pol = -0.1, friendsame_pol = 0.1, breakup_thresh = 0.3):
+            miswdelta_diff = -0.4, miswdelta_trusted = 0.4, poldelta_mono = 0.025,
+            poldelta_mis = 0.05, poldelta_diverse = 0.025, new_weight = 0.5, 
+            frienddelta_pol = -0.025, friendsame_pol = 0.025, breakup_thresh = 0.45):
 
         for p in self.producers:
             # generate info from producer
@@ -144,21 +154,21 @@ class MediaModel:
                     most_trusted = self.most_trusted_source(c.id_)
                     # trust more if most trusted source
                     if p.id_ == most_trusted:
-                        self.adjust_weight(c_id, p_id, wmisdelta_trusted)
+                        self.adjust_weight(c.id_, p.id_, miswdelta_trusted)
 
                     # no change in trust if party is same but not most trusted
                     elif p.party == c.party:
-                        self.adjust_weight(c_id, p_id, wmisdelta_same)
+                        self.adjust_weight(c.id_, p.id_, miswdelta_same)
 
                     # lower trust if party is different from consumer
                     else:
-                        self.adjust_weight(c_id, p_id, wmisdelta_diff)
+                        self.adjust_weight(c.id_, p.id_, miswdelta_diff)
                 
             # adjust consumer political scores
             for c in self.consumers:
                 # if a consumer consumes only the misinformation source, they
                 # become political much faster
-                pn = -1 * (c.party == "blue")
+                pn = -1 if c.party == "blue" else 1
                 if c.consumes_misinfo_only():
                     c.politics_score += pn * poldelta_mis
 
@@ -171,13 +181,12 @@ class MediaModel:
                     c.politics_score += pn * poldelta_mono
                      
                 # possibly make new friends 
-                bad_pick = True
-                while bad_pick:
+                for _ in range(len(self.agents)):
                     f = np.random.choice(self.consumers)
                     if f.id_ != c.id_ and not c.is_friend(f):
-                        bad_pick = False
+                        break
                 
-                p_friendship = 1 - np.abs(c.politics_score - f.politics_score)
+                p_friendship = 0.5
                 if np.random.rand() < p_friendship:
                     self.make_friends(c, f)
                     self.G.add_edge(c.id_, f.id_, weight = new_weight)
@@ -196,6 +205,59 @@ class MediaModel:
                             self.remove_friends(c, f)
                         except nx.exception.NetworkXError:
                             pass
+
+        self.write_data()
+        self.current_iteration += 1
+
+
+    def write_data(self):
+        iteration = self.current_iteration
+
+        # for each consumer:
+        for c in self.consumers:
+            c_data = {"iteration": iteration, "party": c.party}
+            c_data["id"] = c.id_
+            # get number of friends (-1 to account for producer)
+            n_friends = self.G.degree[c.id_] - 1
+            c_data["num_friends"] = n_friends
+            # get politics score
+            politics = c.politics_score
+            c_data["politics_score"] = politics
+            # get mean politics score of friends
+            total_pols = 0
+            for f_id in list(self.G.neighbors(c.id_)):
+                friend = self.consumers[f_id - self.n_producers - 1]
+                total_pols += friend.politics_score
+            mean_friend_pols = total_pols / len(list(self.G.neighbors(c.id_)))
+            c_data["mean_friend_politics"] = mean_friend_pols
+
+            with open(CON_PATH, "a", newline = "") as f:
+                writer = csv.DictWriter(f, fieldnames = c_data.keys())
+                if os.path.getsize(CON_PATH) == 0:
+                    writer.writeheader()
+                writer.writerow(c_data)
+
+        # for each producer:
+        for p in self.producers:
+            p_data = {"iteration": iteration, "party": p.party}
+            # get number of consumers
+            n_customers = self.G.degree[p.id_]
+            p_data["num_customers"] = n_customers
+            # get mean consumer political score
+            customer_ids = self.G.neighbors(p.id_)
+            sum_politics = 0
+            n_customers = self.G.degree[p.id_]
+            for c in self.consumers:
+                if c.id_ in customer_ids:
+                    sum_politics += c.politics_score
+            mean_politics = sum_politics / n_customers
+            p_data["customer_politics"] = mean_politics
+
+            with open(PROD_PATH, "a", newline = "") as f:
+                writer = csv.DictWriter(f, fieldnames = p_data.keys())
+                if os.path.getsize(PROD_PATH) == 0:
+                    writer.writeheader()
+                writer.writerow(p_data)
 
 
     def display(self):
@@ -221,7 +283,7 @@ class MediaModel:
     def most_trusted_source(self, node_id):
         neighbors = list(self.G.neighbors(node_id))
         highest = max(neighbors, key = lambda x : self.G[node_id][x]["weight"])
-        return hightest
+        return highest
 
 
     def adjust_weight(self, node1, node2, delta):
@@ -229,6 +291,12 @@ class MediaModel:
             self.G[node1][node2]["weight"] += delta
         except KeyError:
             return
+
+
+    def get_mean_edge_weight(self, node_id):
+        edges = self.G.edges(node_id, data = True)
+        mean_weight = sum(w["weight"] for _, _, w in edges) / len(edges)
+        return mean_weight
 
 
     # this function changes what displays when running print(MediaModel)

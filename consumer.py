@@ -94,10 +94,11 @@ class Consumer:
 
 
     def consumes_misinfo_only(self):
+        ret = True
         for p in self.producers:
             if p.misinfo_rate == 0:
-                return False
-        return True
+                ret = False
+        return ret
 
 
     def consumes_diverse_media(self):

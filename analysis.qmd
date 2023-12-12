@@ -1,0 +1,26 @@
+---
+title:  "Misinformation Simulation Analysis"
+author: "Mitchell Harrison"
+format: pdf
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| label: import-libraries
+library(tidyverse)
+```
+
+```{r}
+#| label: read-data-from-csv
+cons <- read_csv("data/consumers.csv")
+prods <- read_csv("data/producers.csv")
+prod_params <- read_csv("data/producer_parameters.csv")
+```
+
+# Visualizations
+```{r}
+print("hello world")
+```
+
