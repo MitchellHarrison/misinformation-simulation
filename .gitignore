@@ -2,3 +2,9 @@ __pycache__/
 .Rproj.user
 *.Rproj
 *.csv
+*.aux
+*.fls
+*.log
+*.fdb_latexmk
+*.synctex.gz
+*.toc
