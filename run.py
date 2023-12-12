@@ -25,4 +25,5 @@ model = MediaModel(N_PRODUCERS, N_CONSUMERS)
 # iterate once
 for i in range(N_ITERATIONS):
     model.step()
+model.save_graph_img(title = "Final graph configuration")
 model.display()

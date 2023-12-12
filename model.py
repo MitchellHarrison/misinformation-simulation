@@ -10,6 +10,8 @@ import os
 
 PROD_PATH = "data/producers.csv"
 CON_PATH = "data/consumers.csv"
+RED = "#c22b2b"
+BLUE = "#3734c2"
 
 class MediaModel:
     def __init__(self, n_producers = 3, n_consumers = 50):
@@ -50,6 +52,7 @@ class MediaModel:
         self.setup_starting_edges(edges_per_node)
 
         self.write_data()        
+        self.save_graph_img(title = "Starting network configuration")
         self.current_iteration += 1
 
     # return ID of consumers that have enough friends already
@@ -260,10 +263,23 @@ class MediaModel:
                 writer.writerow(p_data)
 
 
+    def save_graph_img(self, title = "My title"):
+        node_colors = [node.party for node in self.agents]
+        color = [RED if c == "red" else BLUE for c in node_colors]
+        nx.draw(self.G, with_labels=True, font_weight='bold', node_size=700,
+                node_color=color, font_size=10, font_color='black',
+                font_family='sans-serif')
+        i = self.current_iteration
+        plt.title(title)
+        plt.savefig(f"plots/graph_iter{i}.png", format = "png")
+        plt.close()
+
+
     def display(self):
         node_colors = [node.party for node in self.agents]
+        color = [RED if c == "red" else BLUE for c in node_colors]
         nx.draw(self.G, with_labels=True, font_weight='bold', node_size=700,
-                node_color=node_colors, font_size=10, font_color='black',
+                node_color=color, font_size=10, font_color='black',
                 font_family='sans-serif')
         plt.show()
 

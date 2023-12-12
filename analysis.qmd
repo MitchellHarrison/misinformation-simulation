@@ -17,10 +17,87 @@ library(tidyverse)
 cons <- read_csv("data/consumers.csv")
 prods <- read_csv("data/producers.csv")
 prod_params <- read_csv("data/producer_parameters.csv")
+
+RED <- "#c22b2b"
+BLUE <- "#3734c2"
 ```
+
+# EDA
+```{r}
+cons |>
+  filter(id == 4) |>
+  print(n = 1000)
+```
+
 
 # Visualizations
+
+### Politics distribution over time
 ```{r}
-print("hello world")
+cons |>
+  filter(iteration %in% c(max(iteration), min(iteration))) |>
+  mutate(iteration = as.factor(iteration)) |>
+  ggplot(aes(x = politics_score, fill = iteration)) +
+  geom_density(alpha = 0.7) +
+  labs(
+    x = "Political score",
+    y = "Density",
+    title = "Misinformation polarizes everyone",
+    subtitle = "Starting and ending political distributions for N = 20",
+    fill = "Iteration"
+  ) +
+  theme_test() +
+  theme(
+    legend.position = c(.8,.8),
+    panel.grid.major.y = element_line(color = "gray", linetype = "dashed")   
+  )
+
+ggsave("plots/polscore_change.png", height = 1000, width = 2000, units = "px")
 ```
 
+### Median number of friends over time
+```{r}
+cons |>
+  filter(iteration %in% c(max(iteration), min(iteration))) |>
+  mutate(iteration = as.factor(iteration)) |>
+  ggplot(aes(x = iteration, y = num_friends, fill = party)) +
+  geom_boxplot(alpha = 0.6) +
+  scale_fill_manual(values = c(BLUE, RED)) +
+  labs(
+    x = "Iteration",
+    y = "Number of friends",
+    title = "Misinformation consumption brings users together",
+    subtitle = "The \"red\" party consumed misinformation and grew closer",
+    fill = "Party"
+  ) +
+  theme_test() +
+  theme(
+    panel.grid.major.y = element_line(color = "gray", linetype = "dashed")   
+  )
+
+ggsave("plots/nfriends_change.png", height = 1000, width = 2000, units = "px")
+```
+
+### Political score distribution over time by party
+*Note: misinformation consumers were more partisan than non-consumers*
+```{r}
+cons |>
+  filter(iteration %in% c(max(iteration), min(iteration))) |>
+  mutate(iteration = as.factor(iteration)) |>
+  ggplot(aes(x = iteration, y = politics_score, fill = party)) +
+  geom_boxplot(alpha = 0.6) +
+  scale_fill_manual(values = c(BLUE, RED)) +
+  labs(
+    x = "Iteration",
+    y = "Political score",
+    title = "Misinformation also polarized non-consumers",
+    subtitle = "Partisanship before and after running the simulation",
+    fill = "Party"
+  ) +
+  theme_test() +
+  theme(
+    panel.grid.major.y = element_line(color = "gray", linetype = "dashed")   
+  )
+
+ggsave("plots/polscore_change_box.png", height = 1000, width = 2000, units = "px")
+```
